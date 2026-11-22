@@ -103,6 +103,8 @@ describe('show_lesson', () => {
     const r = await call({ fen: KR, moves: 'Ra7 Ke5' })
     expect(r.isError).toBe(true)
     expect(r.content[0].text).toMatch(/Ke5/)
+    expect(r.content[0].text).toMatch(/Legal moves:/)
+    expect(r.content[0].text).toMatch(/retry|again|correct/i)
   })
   test('empty, missing or non-string arguments → isError', async () => {
     expect((await call({ moves: '   ' })).isError).toBe(true)
@@ -147,5 +149,22 @@ describe('request limits', () => {
     for (const b of [[], [{ jsonrpc: '2.0', id: 1, method: 'ping' }]]) {
       expect((await (await post(b)).json()).error.code).toBe(-32600)
     }
+  })
+})
+
+describe('diagnostics', () => {
+  test('a rejected lesson is logged as one short line without the full position or moves', async () => {
+    const lines: string[] = []
+    const orig = console.error
+    console.error = (...a: unknown[]) => void lines.push(a.join(' '))
+    try {
+      await rpc('tools/call', { name: 'show_lesson', arguments: { fen: '6k1/8/8/8/8/8/4K3/R7 w - - 0 1', moves: 'Ra7 Ke5' } })
+    } finally {
+      console.error = orig
+    }
+    expect(lines.length).toBe(1)
+    expect(lines[0]).toMatch(/tool error/i)
+    expect(lines[0]).toMatch(/Ke5/)
+    expect(lines[0]).not.toMatch(/Legal moves|6k1\/8/)
   })
 })

@@ -96,3 +96,26 @@ describe('review fixes: hostile and noisy input', () => {
     expect(() => parseGame('1. e4 banana')).toThrow(/Unrecognized notation/)
   })
 })
+
+describe('actionable move errors', () => {
+  const message = (pgn: string) => {
+    try {
+      parseGame(pgn)
+    } catch (e) {
+      return (e as Error).message
+    }
+    return ''
+  }
+  test('an illegal move reports the position before it and the legal moves', () => {
+    const m = message('1. e4 e5 2. Nf3 Nf3')
+    expect(m).toMatch(/Move 2\.\.\. \(Nf3\)/)
+    expect(m).toContain('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2')
+    expect(m).toMatch(/Legal moves:.*\bNc6\b/)
+    expect(m).not.toMatch(/Legal moves:.*\bNf3\b/)
+  })
+  test('an ambiguous move also lists the legal moves', () => {
+    const m = message('[FEN "4k3/8/8/8/8/8/8/1N2KN2 w - - 0 1"]\n\n1. Nd2')
+    expect(m).toMatch(/Ambiguous/)
+    expect(m).toMatch(/Legal moves:.*\bNbd2\b.*\bNfd2\b|Legal moves:.*\bNfd2\b.*\bNbd2\b/)
+  })
+})

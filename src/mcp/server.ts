@@ -40,7 +40,10 @@ function handle(method: string, params: any, baseUrl: string): unknown {
     case 'tools/list':
       return { tools: TOOLS }
     case 'tools/call':
-      return callTool(String(params?.name ?? ''), params?.arguments)
+      const result = callTool(String(params?.name ?? ''), params?.arguments)
+      // One short line per rejected call, for diagnosing bad model output. Never the full position or moves.
+      if (result.isError) console.error('tool error:', (result.content[0]?.text ?? '').split(' Position before')[0]!.slice(0, 200))
+      return result
     case 'resources/list':
       return { resources: [{ uri: WIDGET_URI, name: 'chessmcp-board', title: 'Chess board', mimeType: WIDGET_MIME }] }
     case 'resources/templates/list':

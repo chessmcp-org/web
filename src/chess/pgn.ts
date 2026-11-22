@@ -1,7 +1,8 @@
 import { START_FEN, parseFen, toFen } from './fen'
 import { type Game, type Ply, gameFromFen } from './game'
-import { applyMove } from './rules'
+import { applyMove, legalMoves } from './rules'
 import { moveToSan, sanToMove } from './san'
+import type { Position } from './types'
 
 export { gameFromFen }
 
@@ -33,7 +34,7 @@ export function parseGame(pgn: string): Game {
   }
 
   let startFen = START_FEN
-  let pos
+  let pos: Position
   try {
     if (headers.FEN) startFen = toFen((pos = parseFen(headers.FEN)))
     else pos = parseFen(START_FEN)
@@ -97,7 +98,11 @@ export function parseGame(pgn: string): Game {
       try {
         move = sanToMove(pos, san)
       } catch (e) {
-        throw new PgnError(`${where} (${san}): ${(e as Error).message}`)
+        const legal = legalMoves(pos).map((m) => moveToSan(pos, m)).join(' ')
+        throw new PgnError(
+          `${where} (${san}): ${(e as Error).message}. Position before this move (FEN): ${toFen(pos)}. Legal moves: ${legal}. ` +
+            'Correct the line from this move on and call the tool again.',
+        )
       }
       const number = pos.fullmove
       const color = pos.turn

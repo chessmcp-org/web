@@ -20,8 +20,8 @@ back. We do not store it, log it, or use it for anything else.
 
 Technical logs. Our hosting provider (DigitalOcean) may keep standard server
 logs, such as IP addresses and request times, as part of running the service.
-Our own application logs only errors and does not record chess data or
-emails.
+Our own application logs only errors, such as a rejected move or a failed
+sign-in. It does not record whole games, emails or names.
 
 2. Cookies
 
