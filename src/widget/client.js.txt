@@ -2,6 +2,7 @@
   var SQ = 90, MARGIN = 40;
   var NS = 'http://www.w3.org/2000/svg';
   var data = null, idx = 0, flipped = false;
+  var playing = false, timer = null;
   var svg = document.getElementById('board-svg');
   var hlLayer = document.createElementNS(NS, 'g');
   var pieceLayer = document.createElementNS(NS, 'g');
@@ -13,6 +14,7 @@
   var btn = {
     first: document.getElementById('b-first'),
     prev: document.getElementById('b-prev'),
+    play: document.getElementById('b-play'),
     next: document.getElementById('b-next'),
     last: document.getElementById('b-last'),
   };
@@ -76,7 +78,7 @@
       b.className = 'mv';
       b.textContent = ply.san;
       b.setAttribute('data-i', i + 1);
-      b.addEventListener('click', function () { go(i + 1); });
+      b.addEventListener('click', function () { user(i + 1); });
       row.appendChild(b);
     });
   }
@@ -98,29 +100,59 @@
     statusEl.textContent = idx + ' / ' + data.plies.length;
     btn.first.disabled = btn.prev.disabled = idx === 0;
     btn.next.disabled = btn.last.disabled = idx === data.plies.length;
+    btn.play.textContent = playing ? 'Pause' : idx >= data.plies.length ? 'Replay' : 'Play';
   }
 
+  function stop() {
+    playing = false;
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  function schedule() {
+    timer = setTimeout(function () {
+      if (!playing) return;
+      if (idx < data.plies.length) go(idx + 1);
+      if (idx >= data.plies.length) { stop(); go(idx); } else schedule();
+    }, data.delayMs || 1500);
+  }
+
+  function play() {
+    if (!data || !data.plies.length) return;
+    stop();
+    if (idx >= data.plies.length) go(0);
+    playing = true;
+    go(idx);
+    schedule();
+  }
+
+  /** A manual navigation always pauses playback. */
+  function user(n) { stop(); go(n); }
+
   function load(d) {
+    stop();
     data = d;
     flipped = false;
     var h = d.headers || {};
-    document.getElementById('title').textContent = h.White || h.Black ? (h.White || '?') + ' vs ' + (h.Black || '?') : 'Chess';
+    document.getElementById('title').textContent = d.title || (h.White || h.Black ? (h.White || '?') + ' vs ' + (h.Black || '?') : 'Chess');
     document.getElementById('subtitle').textContent = [h.Event, h.Date, d.result].filter(Boolean).join(' \u00b7 ');
     document.body.classList.toggle('static', d.plies.length === 0);
     buildMoves();
     go(typeof d.startPly === 'number' ? d.startPly : 0);
+    if (d.plies.length) play();
   }
 
-  btn.first.addEventListener('click', function () { go(0); });
-  btn.prev.addEventListener('click', function () { go(idx - 1); });
-  btn.next.addEventListener('click', function () { go(idx + 1); });
-  btn.last.addEventListener('click', function () { go(data.plies.length); });
+  btn.first.addEventListener('click', function () { user(0); });
+  btn.prev.addEventListener('click', function () { user(idx - 1); });
+  btn.next.addEventListener('click', function () { user(idx + 1); });
+  btn.last.addEventListener('click', function () { user(data.plies.length); });
+  btn.play.addEventListener('click', function () { if (playing) { stop(); go(idx); } else play(); });
   document.addEventListener('keydown', function (e) {
     if (!data) return;
-    if (e.key === 'ArrowLeft') { go(idx - 1); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { go(idx + 1); e.preventDefault(); }
-    else if (e.key === 'Home') { go(0); e.preventDefault(); }
-    else if (e.key === 'End') { go(data.plies.length); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { user(idx - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { user(idx + 1); e.preventDefault(); }
+    else if (e.key === 'Home') { user(0); e.preventDefault(); }
+    else if (e.key === 'End') { user(data.plies.length); e.preventDefault(); }
+    else if (e.key === ' ') { btn.play.click(); e.preventDefault(); }
   });
 
   // The game can arrive embedded (standalone page), in a tool result _meta.game (hidden from the model),

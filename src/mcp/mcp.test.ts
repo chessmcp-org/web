@@ -44,17 +44,17 @@ describe('initialize and listings', () => {
     expect(r.serverInfo.name).toBe('chessmcp')
     expect(r.serverInfo.icons[0]).toEqual({ src: 'https://chessmcp.org/logo-512.png', mimeType: 'image/png', sizes: ['512x512'] })
   })
-  test('tools/list has exactly show_game and show_position linked to the widget', async () => {
+  test('tools/list has exactly show_lesson, linked to the widget', async () => {
     const { tools } = await result(await rpc('tools/list'))
-    expect(tools.map((t: any) => t.name)).toEqual(['show_game', 'show_position'])
+    expect(tools.map((t: any) => t.name)).toEqual(['show_lesson'])
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object')
       expect(t._meta.ui.resourceUri).toBe('ui://widget/chessmcp-v2.html')
       expect(t._meta['openai/outputTemplate']).toBe('ui://widget/chessmcp-v2.html')
       expect(t.annotations.readOnlyHint).toBe(true)
     }
-    expect(tools[0].inputSchema.required).toEqual(['pgn'])
-    expect(tools[1].inputSchema.required).toEqual(['fen'])
+    expect(tools[0].inputSchema.required).toEqual(['moves'])
+    expect(Object.keys(tools[0].inputSchema.properties).sort()).toEqual(['fen', 'moves', 'seconds_per_move', 'title'])
   })
   test('resources/list and resources/read serve the widget html', async () => {
     const { resources } = await result(await rpc('resources/list'))
@@ -66,45 +66,77 @@ describe('initialize and listings', () => {
   })
 })
 
-describe('tools/call', () => {
-  const call = async (name: string, args: unknown) => result(await rpc('tools/call', { name, arguments: args }))
+describe('show_lesson', () => {
+  const call = async (args: unknown, name = 'show_lesson') => result(await rpc('tools/call', { name, arguments: args }))
+  const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
 
-  test('show_game returns a text summary, a small structuredContent and the game in _meta', async () => {
-    const r = await call('show_game', { pgn: PGN })
+  test('plays a line from the standard start: small structuredContent, game in _meta, move list in the text', async () => {
+    const r = await call({ moves: '1. e4 e5 2. Nf3' })
     expect(r.isError).toBeFalsy()
-    expect(r.content[0].text).toContain('Alice vs Bob')
-    expect(r.structuredContent.plyCount).toBe(6)
-    expect(JSON.stringify(r.structuredContent)).not.toContain('rnbqkbnr')
-    expect(r._meta.game.plies.length).toBe(6)
-    expect(r._meta.game.startPly).toBe(6)
+    expect(r.structuredContent.plyCount).toBe(3)
+    expect(r.structuredContent.plies).toBeUndefined()
+    expect(JSON.stringify(r.structuredContent).length).toBeLessThan(300)
+    expect(r._meta.game.plies.map((p: any) => p.san)).toEqual(['e4', 'e5', 'Nf3'])
+    expect(r._meta.game.delayMs).toBe(1500)
+    expect(r.content[0].text).toContain('1. e4 e5 2. Nf3')
   })
-  test('ply argument selects the starting ply, clamped', async () => {
-    expect((await call('show_game', { pgn: PGN, ply: 2 }))._meta.game.startPly).toBe(2)
-    expect((await call('show_game', { pgn: PGN, ply: 999 }))._meta.game.startPly).toBe(6)
-    expect((await call('show_game', { pgn: PGN, ply: -5 }))._meta.game.startPly).toBe(0)
+  test('starts from a custom fen, carries the title, and keeps comments as captions', async () => {
+    const r = await call({ fen: KR, title: 'Rook mate', moves: 'Ra7 {cuts off the king} Kf8 Kf3' })
+    expect(r._meta.game.startFen).toBe(KR)
+    expect(r._meta.game.title).toBe('Rook mate')
+    expect(r._meta.game.plies[0].comment).toBe('cuts off the king')
+    expect(r.content[0].text).toContain('Rook mate')
+  })
+  test('accepts a full PGN with headers as moves', async () => {
+    const r = await call({ moves: '[White "A"]\n[Black "B"]\n\n1. e4 e5' })
+    expect(r._meta.game.plies.length).toBe(2)
+    expect(r._meta.game.headers.White).toBe('A')
+  })
+  test('seconds_per_move sets the delay, clamped to 0.3-10 s, default 1.5 s', async () => {
+    const delay = async (v: unknown) => (await call({ moves: '1. e4', seconds_per_move: v }))._meta.game.delayMs
+    expect(await delay(2)).toBe(2000)
+    expect(await delay(0)).toBe(300)
+    expect(await delay(99)).toBe(10000)
+    expect(await delay('fast')).toBe(1500)
   })
   test('illegal move → isError naming the move', async () => {
-    const r = await call('show_game', { pgn: '1. e4 e5 2. Nf3 Nf3' })
+    const r = await call({ fen: KR, moves: 'Ra7 Ke5' })
     expect(r.isError).toBe(true)
-    expect(r.content[0].text).toMatch(/Move 2/)
+    expect(r.content[0].text).toMatch(/Ke5/)
   })
-  test('missing, non-string and oversized pgn → isError', async () => {
-    expect((await call('show_game', {})).isError).toBe(true)
-    expect((await call('show_game', { pgn: 42 })).isError).toBe(true)
-    expect((await call('show_game', { pgn: '1. e4 '.repeat(40_000) })).isError).toBe(true)
+  test('empty, missing or non-string arguments → isError', async () => {
+    expect((await call({ moves: '   ' })).isError).toBe(true)
+    expect((await call({})).isError).toBe(true)
+    expect((await call({ moves: 42 })).isError).toBe(true)
+    expect((await call({ moves: '1. e4', fen: 5 })).isError).toBe(true)
+    expect((await call({ moves: '1. e4', title: {} })).isError).toBe(true)
+    expect((await call({ moves: '1. e4', fen: 'nope' })).isError).toBe(true)
   })
-  test('show_position renders a FEN with zero plies; bad FEN → isError', async () => {
-    const r = await call('show_position', { fen: '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1' })
-    expect(r.isError).toBeFalsy()
-    expect(r._meta.game.plies.length).toBe(0)
-    expect((await call('show_position', { fen: 'nope' })).isError).toBe(true)
+  test('a hostile fen cannot inject PGN headers', async () => {
+    expect((await call({ fen: KR + '"]\n[White "x', moves: 'Ra7' })).isError).toBe(true)
   })
-  test('unknown tool → isError', async () => {
-    expect((await call('nope', {})).isError).toBe(true)
+  test('oversized moves and games over the ply cap → isError', async () => {
+    expect((await call({ moves: '1. e4 '.repeat(40_000) })).isError).toBe(true)
+    const cycle = ['Nf3', 'Nf6', 'Ng1', 'Ng8']
+    const r = await call({ moves: Array.from({ length: 2001 }, (_, i) => cycle[i % 4]).join(' ') })
+    expect(r.isError).toBe(true)
+    expect(r.content[0].text).toMatch(/2000/)
+  })
+  test('the old tools are gone', async () => {
+    expect((await call({ pgn: '1. e4' }, 'show_game')).isError).toBe(true)
+    expect((await call({ fen: KR }, 'show_position')).isError).toBe(true)
+  })
+  test('description and instructions push the model toward commented, step-by-step lessons', async () => {
+    const { tools } = await result(await rpc('tools/list'))
+    expect(tools[0].description).toMatch(/comment/i)
+    expect(tools[0].description).toMatch(/auto/i)
+    const init = await result(await rpc('initialize', { protocolVersion: '2025-06-18' }))
+    expect(init.instructions).toMatch(/show_lesson/)
+    expect(init.instructions).toMatch(/lesson|example|how to/i)
   })
 })
 
-describe('review fixes: request limits', () => {
+describe('request limits', () => {
   test('a body over 256 KB is rejected with 413', async () => {
     const res = await app.request(`/mcp/${token}`, { method: 'POST', body: 'x'.repeat(300_000) })
     expect(res.status).toBe(413)
@@ -113,88 +145,7 @@ describe('review fixes: request limits', () => {
     const post = (body: unknown) =>
       app.request(`/mcp/${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     for (const b of [[], [{ jsonrpc: '2.0', id: 1, method: 'ping' }]]) {
-      const j = await (await post(b)).json()
-      expect(j.error.code).toBe(-32600)
+      expect((await (await post(b)).json()).error.code).toBe(-32600)
     }
-  })
-  test('a game over the ply cap returns isError', async () => {
-    const cycle = ['Nf3', 'Nf6', 'Ng1', 'Ng8']
-    const pgn = Array.from({ length: 2001 }, (_, i) => cycle[i % 4]).join(' ')
-    const r = await result(await rpc('tools/call', { name: 'show_game', arguments: { pgn } }))
-    expect(r.isError).toBe(true)
-    expect(r.content[0].text).toMatch(/2000/)
-  })
-  test('show_position rejects an impossible position', async () => {
-    const r = await result(await rpc('tools/call', { name: 'show_position', arguments: { fen: '4k3/8/8/8/8/8/8/4RK2 w - - 0 1' } }))
-    expect(r.isError).toBe(true)
-  })
-})
-
-describe('tutorials from a position', () => {
-  const call = async (name: string, args: unknown) => result(await rpc('tools/call', { name, arguments: args }))
-  const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
-
-  test('show_position with moves plays the line from that position, starting at the beginning', async () => {
-    const r = await call('show_position', { fen: KR, moves: 'Ra7 Kf8 Kf3 Kg8' })
-    expect(r.isError).toBeFalsy()
-    expect(r._meta.game.plies.map((p: any) => p.san)).toEqual(['Ra7', 'Kf8', 'Kf3', 'Kg8'])
-    expect(r._meta.game.startPly).toBe(0)
-    expect(r._meta.game.startFen).toBe(KR)
-  })
-  test('moves may carry move numbers and the ply argument picks the starting move', async () => {
-    const r = await call('show_position', { fen: KR, moves: '1. Ra7 Kf8 2. Kf3', ply: 2 })
-    expect(r._meta.game.plies.length).toBe(3)
-    expect(r._meta.game.startPly).toBe(2)
-  })
-  test('an illegal move in moves → isError naming the move; non-string moves → isError', async () => {
-    const bad = await call('show_position', { fen: KR, moves: 'Ra7 Ke5' })
-    expect(bad.isError).toBe(true)
-    expect(bad.content[0].text).toMatch(/Ke5/)
-    expect((await call('show_position', { fen: KR, moves: 42 })).isError).toBe(true)
-  })
-  test('a hostile fen cannot inject PGN headers through moves', async () => {
-    const r = await call('show_position', { fen: KR + '"]\n[White "x', moves: 'Ra7' })
-    expect(r.isError).toBe(true)
-  })
-  test('descriptions steer the model: show_position says to pass moves for sequences, show_game mentions FEN starts', async () => {
-    const { tools } = await result(await rpc('tools/list'))
-    expect(tools[1].inputSchema.properties.moves).toBeDefined()
-    expect(tools[1].description).toMatch(/moves/)
-    expect(tools[1].description).toMatch(/show_game|sequence/)
-    expect(tools[0].description).toMatch(/FEN/)
-  })
-  test('result text tells the model which position and last move are on screen', async () => {
-    const r = await call('show_game', { pgn: '1. e4 e5 2. Nf3', ply: 2 })
-    const text = r.content[0].text
-    expect(text).toContain('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2')
-    expect(text).toContain('1... e5')
-    const fresh = await call('show_position', { fen: KR })
-    expect(fresh.content[0].text).toContain(KR)
-  })
-})
-
-describe('steering the model toward lessons', () => {
-  const call = async (name: string, args: unknown) => result(await rpc('tools/call', { name, arguments: args }))
-  const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
-
-  test('show_position without moves tells the model the board is static and how to fix it', async () => {
-    const text = (await call('show_position', { fen: KR })).content[0].text
-    expect(text).toMatch(/static/i)
-    expect(text).toMatch(/show_game/)
-    expect(text).toMatch(/moves/)
-  })
-  test('the hint is absent when moves were given, and for show_game', async () => {
-    expect((await call('show_position', { fen: KR, moves: 'Ra7' })).content[0].text).not.toMatch(/static/i)
-    expect((await call('show_game', { pgn: '1. e4 e5' })).content[0].text).not.toMatch(/static/i)
-  })
-  test('show_position description restricts it to specific positions, never to techniques', async () => {
-    const { tools } = await result(await rpc('tools/list'))
-    expect(tools[1].description).toMatch(/only/i)
-    expect(tools[1].description).toMatch(/never|not/i)
-  })
-  test('initialize instructions tell the model to use moves for lessons and examples', async () => {
-    const r = await result(await rpc('initialize', { protocolVersion: '2025-06-18' }))
-    expect(r.instructions).toMatch(/example|lesson|how to/i)
-    expect(r.instructions).toMatch(/show_game/)
   })
 })

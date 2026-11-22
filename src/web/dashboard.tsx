@@ -26,7 +26,7 @@ export function Dashboard(props: { email: string; url: string }) {
           <li>Open ChatGPT and go to its plugin settings (chatgpt.com/plugins).</li>
           <li>Choose “Add custom MCP server”.</li>
           <li>Paste your link as the server URL and set authentication to none. The link itself is the key.</li>
-          <li>Start a new chat and ask: “Show me the Opera Game on a board.”</li>
+          <li>Start a new chat and ask: “Teach me how to checkmate with a king and a rook.”</li>
         </ol>
       </section>
       <script dangerouslySetInnerHTML={{ __html: COPY_JS }} />

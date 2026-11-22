@@ -11,6 +11,9 @@ Visualize chess games / tutorials / positions as interactive SVG boards, embedde
 - MCP auth: private URL `https://chessmcp.org/mcp/<token>`, token = base64url(sub) + HMAC(SECRET). Added in ChatGPT as a connector with no auth. Revocation = rotate the secret (revokes everyone). No usage limits or abuse detection for now.
 - Hosting: DigitalOcean App Platform (Dockerfile build) in the DO project "chessmcp.org". DNS in Cloudflare.
 
+## Direction change: lessons (22 Nov 2026)
+The MCP server now exposes a single tool, `show_lesson({ moves, fen?, title?, seconds_per_move? })`. A lesson is a series of moves that auto-plays with a delay (default 1.5 s). The user can pause, step back and forward, and replay; `{comments}` in the moves show as captions. `show_game` and `show_position` were removed. Widget resource: `ui://widget/chessmcp-v2.html`.
+
 ## Architecture
 ```
 src/

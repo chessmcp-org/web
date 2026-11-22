@@ -32,7 +32,7 @@ function handle(method: string, params: any, baseUrl: string): unknown {
           icons: [{ src: `${baseUrl}/logo-512.png`, mimeType: 'image/png', sizes: ['512x512'] }],
         },
         instructions:
-          'Show chess on an interactive board the user can step through. For any lesson, example, technique, opening, endgame method or "how to" question, write out the full sequence of moves and call show_game with a PGN (add [SetUp "1"] and [FEN "..."] headers to start from a custom position). Use show_position without moves only when the user asks to see one specific position.',
+          'Teach chess with an interactive board. For any lesson, example, technique, opening, endgame method, puzzle solution or \"how to\" question, write out the complete sequence of moves and call show_lesson: it auto-plays the moves one by one and the user can pause, step and replay. Add short {comments} after the key moves to explain them. Pass fen to start from a custom position.',
       }
     }
     case 'ping':

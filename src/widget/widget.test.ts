@@ -47,7 +47,14 @@ describe('renderWidgetHtml', () => {
     expect(html).toContain('id="board-svg"')
   })
   test('startPly is carried in the embedded data when given', () => {
-    const data = embedded(renderWidgetHtml(parseGame(SHORT), 2))
+    const data = embedded(renderWidgetHtml(parseGame(SHORT), { startPly: 2 }))
     expect(data.startPly).toBe(2)
+  })
+  test('has play/pause control and embeds title and delay when given', () => {
+    const html = renderWidgetHtml(parseGame(SHORT), { title: 'My lesson', delayMs: 2000 })
+    expect(html).toContain('id="b-play"')
+    const data = embedded(html)
+    expect(data.title).toBe('My lesson')
+    expect(data.delayMs).toBe(2000)
   })
 })

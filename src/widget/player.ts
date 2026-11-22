@@ -16,14 +16,22 @@ export type WidgetData = {
   headers: Record<string, string>
   startFen: string
   result?: string
+  /** Lesson title shown above the board. */
+  title?: string
+  /** Pause between moves while auto-playing. */
+  delayMs?: number
   /** Ply to show first (0 = start position). Defaults to 0. */
   startPly?: number
   plies: { san: string; fen: string; comment?: string; number: number; color: 'w' | 'b'; from: number; to: number }[]
 }
 
-export function widgetData(game: Game, startPly?: number): WidgetData {
+export type WidgetOptions = { startPly?: number; title?: string; delayMs?: number }
+
+export function widgetData(game: Game, opts: WidgetOptions = {}): WidgetData {
   return {
-    startPly,
+    startPly: opts.startPly,
+    title: opts.title,
+    delayMs: opts.delayMs,
     headers: game.headers,
     startFen: game.startFen,
     result: game.result,
@@ -52,15 +60,16 @@ aside{flex:1 1 180px;min-width:160px;display:flex;flex-direction:column}
 nav{display:flex;gap:6px;align-items:center;margin-top:10px}
 nav button{min-width:44px;font-weight:700;background:var(--panel);color:var(--fg);border:1px solid #4a4743;border-radius:6px;padding:6px 14px;font-size:16px;cursor:pointer}
 nav button:disabled{opacity:.35;cursor:default}
+#b-play{min-width:92px;font-size:15px}
 #status{margin-left:auto;color:var(--muted)}
 body.static aside,body.static nav{display:none}
 footer{margin-top:12px;color:var(--muted);font-size:11px}
 `
 
 /** `game = null` renders the shell used as the MCP resource: the host later supplies the data (see client.js.txt). */
-export function renderWidgetHtml(game: Game | null, startPly?: number): string {
+export function renderWidgetHtml(game: Game | null, opts: WidgetOptions = {}): string {
   const h = game?.headers ?? {}
-  const players = h.White || h.Black ? `${escapeXml(h.White ?? '?')} vs ${escapeXml(h.Black ?? '?')}` : 'Chess'
+  const players = opts.title ? escapeXml(opts.title) : h.White || h.Black ? `${escapeXml(h.White ?? '?')} vs ${escapeXml(h.Black ?? '?')}` : 'Chess'
   const sub = [h.Event, h.Date, game?.result].filter(Boolean).map((s) => escapeXml(s!)).join(' · ')
   const startFen = game?.startFen ?? START_FEN
   // Empty board (squares + labels + piece defs); the client draws pieces and highlights on top.
@@ -73,11 +82,11 @@ export function renderWidgetHtml(game: Game | null, startPly?: number): string {
 <div class="main"><div id="board">${board}</div><aside><div id="moves"></div><div id="comment"></div></aside></div>
 <nav aria-label="Playback">
 <button id="b-first" type="button" title="Start (Home)">«</button><button id="b-prev" type="button" title="Back (←)">‹</button>
-<button id="b-next" type="button" title="Forward (→)">›</button><button id="b-last" type="button" title="End (End)">»</button>
+<button id="b-play" type="button" title="Play / pause (Space)">Play</button><button id="b-next" type="button" title="Forward (→)">›</button><button id="b-last" type="button" title="End (End)">»</button>
 <span id="status"></span></nav>
 <footer>${escapeXml(ATTRIBUTION)} · chessmcp.org</footer>
 </div>
-<script type="application/json" id="game-data">${safeJson(game ? widgetData(game, startPly) : null)}</script>
+<script type="application/json" id="game-data">${safeJson(game ? widgetData(game, opts) : null)}</script>
 <script>${CLIENT_JS}</script>
 </body></html>`
 }

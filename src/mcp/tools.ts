@@ -1,54 +1,41 @@
 import { parseFen, toFen } from '../chess/fen'
-import { gameFromFen } from '../chess/game'
-import { PgnError, parseGame } from '../chess/pgn'
 import type { Game } from '../chess/game'
+import { parseGame } from '../chess/pgn'
 import { widgetData } from '../widget/player'
 
 export const WIDGET_URI = 'ui://widget/chessmcp-v2.html'
 export const WIDGET_MIME = 'text/html;profile=mcp-app'
 export const MAX_PGN_CHARS = 200_000
-
-const widgetMeta = (invoking: string, invoked: string) => ({
-  ui: { resourceUri: WIDGET_URI },
-  'openai/outputTemplate': WIDGET_URI,
-  'openai/toolInvocation/invoking': invoking,
-  'openai/toolInvocation/invoked': invoked,
-})
-const annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+export const DEFAULT_DELAY_MS = 1500
+export const MIN_DELAY_MS = 300
+export const MAX_DELAY_MS = 10_000
 
 export const TOOLS = [
   {
-    name: 'show_game',
-    title: 'Show chess game',
+    name: 'show_lesson',
+    title: 'Show chess lesson',
     description:
-      'Show a chess game or lesson as an interactive board the user can step through move by move. Pass the full game as PGN (standard movetext, optional headers and comments). To start from a custom position (a tutorial, endgame or puzzle), put [SetUp "1"] and [FEN "..."] headers before the moves. Prefer this tool whenever the user wants to learn or follow a sequence of moves.',
+      'Show a chess lesson: a sequence of moves that auto-plays on an interactive board, one move at a time, with a delay between moves. The user can pause, step backward and forward, and replay. Use it for any example, technique, opening, endgame method, puzzle solution or game the user wants to see or learn. Write out the complete line in moves (SAN, e.g. "1. Ra7 Kf8 2. Kf3"). Add a short comment after important moves in curly braces, e.g. "1. Ra7 {Cuts off the king along the 7th rank} Kf8"; each comment is shown as a caption while that move is on the board. Start from a custom position by passing fen; otherwise it starts from the standard starting position. Moves may also be a full PGN.',
     inputSchema: {
       type: 'object',
       properties: {
-        pgn: { type: 'string', description: 'The game in PGN format.' },
-        ply: { type: 'integer', description: 'Half-move to show first (0 = start position). Defaults to the end of the game.' },
+        moves: {
+          type: 'string',
+          description: 'The moves in SAN or PGN movetext. Move numbers and {comments} are allowed. Must contain at least one move.',
+        },
+        fen: { type: 'string', description: 'Optional starting position in FEN. Defaults to the standard starting position.' },
+        title: { type: 'string', description: 'Optional short title shown above the board, e.g. "Rook and king checkmate".' },
+        seconds_per_move: { type: 'number', description: 'Optional pause between moves while playing, in seconds (0.3 to 10). Default 1.5.' },
       },
-      required: ['pgn'],
+      required: ['moves'],
     },
-    annotations,
-    _meta: widgetMeta('Setting up the board…', 'Board ready'),
-  },
-  {
-    name: 'show_position',
-    title: 'Show chess position',
-    description:
-      'Show ONE specific chess position from a FEN on an interactive board. Use it only when the user asks to see a particular position, with no moves to follow. Never use it to illustrate a technique, example, opening, endgame method or puzzle solution: those need moves, so also pass moves (SAN, e.g. "Ra7 Kf8 Kf3") or call show_game. A position without moves is a static picture the user cannot step through.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        fen: { type: 'string', description: 'The position in FEN notation.' },
-        moves: { type: 'string', description: 'Optional moves to play from the position, in SAN separated by spaces (move numbers allowed).' },
-        ply: { type: 'integer', description: 'Half-move to show first (0 = the given position, the default).' },
-      },
-      required: ['fen'],
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    _meta: {
+      ui: { resourceUri: WIDGET_URI },
+      'openai/outputTemplate': WIDGET_URI,
+      'openai/toolInvocation/invoking': 'Setting up the lesson…',
+      'openai/toolInvocation/invoked': 'Lesson ready',
     },
-    annotations,
-    _meta: widgetMeta('Setting up the board…', 'Position ready'),
   },
 ]
 
@@ -61,54 +48,48 @@ export type ToolResult = {
 
 const fail = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true })
 
-const STATIC_HINT =
-  ' Note: no moves were given, so the user sees a static board they cannot step through. If they asked how to do something, for an example, a lesson or a technique, call show_game with the full PGN (or show_position with moves) so they can step through it.'
+function moveListText(game: Game): string {
+  return game.plies.map((p, i) => (p.color === 'w' ? `${p.number}. ${p.san}` : i === 0 ? `${p.number}... ${p.san}` : p.san)).join(' ')
+}
 
-function describe(game: Game, startPly: number, hintIfStatic = false): ToolResult {
+function describe(game: Game, title: string | undefined, delayMs: number): ToolResult {
   const h = game.headers
-  const title = h.White || h.Black ? `${h.White ?? '?'} vs ${h.Black ?? '?'}` : game.plies.length ? 'Chess game' : 'Chess position'
-  const parts = [title]
-  if (game.plies.length) parts.push(`${game.plies.length} half-moves`)
-  if (game.result) parts.push(`result ${game.result}`)
-  const shown = startPly > 0 ? game.plies[startPly - 1] : undefined
-  const fen = shown ? shown.fen : game.startFen
-  const last = shown ? ` Last move: ${shown.number}${shown.color === 'w' ? '.' : '...'} ${shown.san}.` : ''
+  const name = title ?? (h.White || h.Black ? `${h.White ?? '?'} vs ${h.Black ?? '?'}` : 'Chess lesson')
+  const moves = moveListText(game)
   return {
     content: [
       {
         type: 'text',
-        text: `${parts.join(', ')}. An interactive board is shown to the user at ply ${startPly}.${last} Position shown (FEN): ${fen}${hintIfStatic && game.plies.length === 0 ? STATIC_HINT : ''}`,
+        text:
+          `${name}: ${game.plies.length} half-moves. The lesson auto-plays on an interactive board shown to the user, ` +
+          `with pause, step and replay controls. Start position (FEN): ${game.startFen}. Moves: ${moves.length > 1500 ? moves.slice(0, 1500) + '…' : moves}`,
       },
     ],
     // structuredContent is visible to the model, so keep it small; the full game goes in _meta (component only).
-    structuredContent: { title, plyCount: game.plies.length, startPly, result: game.result ?? null, fen },
-    _meta: { game: widgetData(game, startPly) },
+    structuredContent: { title: name, plyCount: game.plies.length, startFen: game.startFen },
+    _meta: { game: widgetData(game, { title: name, delayMs }) },
   }
 }
 
 export function callTool(name: string, args: unknown): ToolResult {
+  if (name !== 'show_lesson') return fail(`Unknown tool "${name}".`)
   const a = (args && typeof args === 'object' ? args : {}) as Record<string, unknown>
   try {
-    if (name === 'show_game') {
-      if (typeof a.pgn !== 'string') return fail('Argument "pgn" must be a string containing the game in PGN format.')
-      if (a.pgn.length > MAX_PGN_CHARS) return fail(`PGN is too large (limit ${MAX_PGN_CHARS} characters).`)
-      const game = parseGame(a.pgn)
-      const requested = typeof a.ply === 'number' && Number.isFinite(a.ply) ? Math.trunc(a.ply) : game.plies.length
-      return describe(game, Math.max(0, Math.min(game.plies.length, requested)))
-    }
-    if (name === 'show_position') {
-      if (typeof a.fen !== 'string') return fail('Argument "fen" must be a string.')
-      if (a.moves !== undefined && typeof a.moves !== 'string') return fail('Argument "moves" must be a string of SAN moves.')
-      const start = toFen(parseFen(a.fen)) // validates and normalizes, so it is safe to embed in a header
-      if (typeof a.moves !== 'string' || !a.moves.trim()) return describe(gameFromFen(start), 0, true)
-      if (a.moves.length > MAX_PGN_CHARS) return fail(`Moves are too long (limit ${MAX_PGN_CHARS} characters).`)
-      const game = parseGame(`[SetUp "1"]\n[FEN "${start}"]\n\n${a.moves}`)
-      const requested = typeof a.ply === 'number' && Number.isFinite(a.ply) ? Math.trunc(a.ply) : 0
-      return describe(game, Math.max(0, Math.min(game.plies.length, requested)))
-    }
-    return fail(`Unknown tool "${name}".`)
+    if (typeof a.moves !== 'string') return fail('Argument "moves" must be a string of chess moves (SAN or PGN movetext).')
+    if (!a.moves.trim()) return fail('A lesson needs at least one move in "moves".')
+    if (a.moves.length > MAX_PGN_CHARS) return fail(`Moves are too long (limit ${MAX_PGN_CHARS} characters).`)
+    if (a.fen !== undefined && typeof a.fen !== 'string') return fail('Argument "fen" must be a string.')
+    if (a.title !== undefined && typeof a.title !== 'string') return fail('Argument "title" must be a string.')
+    const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 120) : undefined
+    const seconds = typeof a.seconds_per_move === 'number' && Number.isFinite(a.seconds_per_move) ? a.seconds_per_move : DEFAULT_DELAY_MS / 1000
+    const delayMs = Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, Math.round(seconds * 1000)))
+    // Normalizing through toFen validates the FEN and makes it safe to embed in a header.
+    const header = typeof a.fen === 'string' ? `[SetUp "1"]\n[FEN "${toFen(parseFen(a.fen))}"]\n\n` : ''
+    const game = parseGame(header + a.moves)
+    if (game.plies.length === 0) return fail('A lesson needs at least one move in "moves".')
+    return describe(game, title, delayMs)
   } catch (e) {
-    if (e instanceof PgnError || e instanceof Error) return fail(e.message)
+    if (e instanceof Error) return fail(e.message)
     throw e
   }
 }
