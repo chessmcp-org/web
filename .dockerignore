@@ -1,0 +1,9 @@
+.env
+.git
+.superpowers
+.vscode
+node_modules
+docs
+scripts
+*.md
+todo.txt

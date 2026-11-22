@@ -1,0 +1,30 @@
+# DigitalOcean App Platform spec. Secret values are NOT stored here: set GOOGLE_CLIENT_SECRET and
+# SESSION_SECRET in the DO dashboard (or pass them via a temporary spec when running `doctl apps create`).
+name: chessmcp
+region: fra
+domains:
+  - domain: chessmcp.org
+    type: PRIMARY
+services:
+  - name: web
+    dockerfile_path: Dockerfile
+    github:
+      repo: chessmcp-org/web
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: BASE_URL
+        value: https://chessmcp.org
+      - key: PORT
+        value: "8080"
+      - key: GOOGLE_CLIENT_ID
+        value: 806440966352-ijjo206b9u6d773glra3d6s4p1ref9gu.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        type: SECRET
+      - key: SESSION_SECRET
+        type: SECRET
