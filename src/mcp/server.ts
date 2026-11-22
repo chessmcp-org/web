@@ -31,7 +31,8 @@ function handle(method: string, params: any, baseUrl: string): unknown {
           version: '0.1.0',
           icons: [{ src: `${baseUrl}/logo-512.png`, mimeType: 'image/png', sizes: ['512x512'] }],
         },
-        instructions: 'Use show_game to display a PGN game, or show_position to display a FEN position, as an interactive board.',
+        instructions:
+          'Show chess on an interactive board the user can step through. For any lesson, example, technique, opening, endgame method or "how to" question, write out the full sequence of moves and call show_game with a PGN (add [SetUp "1"] and [FEN "..."] headers to start from a custom position). Use show_position without moves only when the user asks to see one specific position.',
       }
     }
     case 'ping':

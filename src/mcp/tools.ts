@@ -4,7 +4,7 @@ import { PgnError, parseGame } from '../chess/pgn'
 import type { Game } from '../chess/game'
 import { widgetData } from '../widget/player'
 
-export const WIDGET_URI = 'ui://widget/chessmcp-v1.html'
+export const WIDGET_URI = 'ui://widget/chessmcp-v2.html'
 export const WIDGET_MIME = 'text/html;profile=mcp-app'
 export const MAX_PGN_CHARS = 200_000
 
@@ -37,7 +37,7 @@ export const TOOLS = [
     name: 'show_position',
     title: 'Show chess position',
     description:
-      'Show one chess position from a FEN string on an interactive board. For a single static position, pass only fen. To teach a sequence from that position (a mating technique, an opening line, a puzzle solution), also pass moves (SAN, e.g. "Ra7 Kf8 Kf3") so the user can step through them; this is the same as calling show_game with a FEN header.',
+      'Show ONE specific chess position from a FEN on an interactive board. Use it only when the user asks to see a particular position, with no moves to follow. Never use it to illustrate a technique, example, opening, endgame method or puzzle solution: those need moves, so also pass moves (SAN, e.g. "Ra7 Kf8 Kf3") or call show_game. A position without moves is a static picture the user cannot step through.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -61,7 +61,10 @@ export type ToolResult = {
 
 const fail = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true })
 
-function describe(game: Game, startPly: number): ToolResult {
+const STATIC_HINT =
+  ' Note: no moves were given, so the user sees a static board they cannot step through. If they asked how to do something, for an example, a lesson or a technique, call show_game with the full PGN (or show_position with moves) so they can step through it.'
+
+function describe(game: Game, startPly: number, hintIfStatic = false): ToolResult {
   const h = game.headers
   const title = h.White || h.Black ? `${h.White ?? '?'} vs ${h.Black ?? '?'}` : game.plies.length ? 'Chess game' : 'Chess position'
   const parts = [title]
@@ -74,7 +77,7 @@ function describe(game: Game, startPly: number): ToolResult {
     content: [
       {
         type: 'text',
-        text: `${parts.join(', ')}. An interactive board is shown to the user at ply ${startPly}.${last} Position shown (FEN): ${fen}`,
+        text: `${parts.join(', ')}. An interactive board is shown to the user at ply ${startPly}.${last} Position shown (FEN): ${fen}${hintIfStatic && game.plies.length === 0 ? STATIC_HINT : ''}`,
       },
     ],
     // structuredContent is visible to the model, so keep it small; the full game goes in _meta (component only).
@@ -97,7 +100,7 @@ export function callTool(name: string, args: unknown): ToolResult {
       if (typeof a.fen !== 'string') return fail('Argument "fen" must be a string.')
       if (a.moves !== undefined && typeof a.moves !== 'string') return fail('Argument "moves" must be a string of SAN moves.')
       const start = toFen(parseFen(a.fen)) // validates and normalizes, so it is safe to embed in a header
-      if (typeof a.moves !== 'string' || !a.moves.trim()) return describe(gameFromFen(start), 0)
+      if (typeof a.moves !== 'string' || !a.moves.trim()) return describe(gameFromFen(start), 0, true)
       if (a.moves.length > MAX_PGN_CHARS) return fail(`Moves are too long (limit ${MAX_PGN_CHARS} characters).`)
       const game = parseGame(`[SetUp "1"]\n[FEN "${start}"]\n\n${a.moves}`)
       const requested = typeof a.ply === 'number' && Number.isFinite(a.ply) ? Math.trunc(a.ply) : 0

@@ -49,8 +49,8 @@ describe('initialize and listings', () => {
     expect(tools.map((t: any) => t.name)).toEqual(['show_game', 'show_position'])
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object')
-      expect(t._meta.ui.resourceUri).toBe('ui://widget/chessmcp-v1.html')
-      expect(t._meta['openai/outputTemplate']).toBe('ui://widget/chessmcp-v1.html')
+      expect(t._meta.ui.resourceUri).toBe('ui://widget/chessmcp-v2.html')
+      expect(t._meta['openai/outputTemplate']).toBe('ui://widget/chessmcp-v2.html')
       expect(t.annotations.readOnlyHint).toBe(true)
     }
     expect(tools[0].inputSchema.required).toEqual(['pgn'])
@@ -58,8 +58,8 @@ describe('initialize and listings', () => {
   })
   test('resources/list and resources/read serve the widget html', async () => {
     const { resources } = await result(await rpc('resources/list'))
-    expect(resources[0]).toMatchObject({ uri: 'ui://widget/chessmcp-v1.html', mimeType: 'text/html;profile=mcp-app' })
-    const { contents } = await result(await rpc('resources/read', { uri: 'ui://widget/chessmcp-v1.html' }))
+    expect(resources[0]).toMatchObject({ uri: 'ui://widget/chessmcp-v2.html', mimeType: 'text/html;profile=mcp-app' })
+    const { contents } = await result(await rpc('resources/read', { uri: 'ui://widget/chessmcp-v2.html' }))
     expect(contents[0].mimeType).toBe('text/html;profile=mcp-app')
     expect(contents[0].text.startsWith('<!doctype html>')).toBe(true)
     expect((await (await rpc('resources/read', { uri: 'ui://nope' })).json()).error).toBeDefined()
@@ -170,5 +170,31 @@ describe('tutorials from a position', () => {
     expect(text).toContain('1... e5')
     const fresh = await call('show_position', { fen: KR })
     expect(fresh.content[0].text).toContain(KR)
+  })
+})
+
+describe('steering the model toward lessons', () => {
+  const call = async (name: string, args: unknown) => result(await rpc('tools/call', { name, arguments: args }))
+  const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
+
+  test('show_position without moves tells the model the board is static and how to fix it', async () => {
+    const text = (await call('show_position', { fen: KR })).content[0].text
+    expect(text).toMatch(/static/i)
+    expect(text).toMatch(/show_game/)
+    expect(text).toMatch(/moves/)
+  })
+  test('the hint is absent when moves were given, and for show_game', async () => {
+    expect((await call('show_position', { fen: KR, moves: 'Ra7' })).content[0].text).not.toMatch(/static/i)
+    expect((await call('show_game', { pgn: '1. e4 e5' })).content[0].text).not.toMatch(/static/i)
+  })
+  test('show_position description restricts it to specific positions, never to techniques', async () => {
+    const { tools } = await result(await rpc('tools/list'))
+    expect(tools[1].description).toMatch(/only/i)
+    expect(tools[1].description).toMatch(/never|not/i)
+  })
+  test('initialize instructions tell the model to use moves for lessons and examples', async () => {
+    const r = await result(await rpc('initialize', { protocolVersion: '2025-06-18' }))
+    expect(r.instructions).toMatch(/example|lesson|how to/i)
+    expect(r.instructions).toMatch(/show_game/)
   })
 })
