@@ -35,9 +35,15 @@ export function moveToSan(p: Position, m: Move): string {
   return san
 }
 
-/** Parse a SAN move (tolerates 0-0, x/+/#/!? decorations) in the given position. */
+const MAX_SAN_CHARS = 16
+
+/** Parse a SAN move (tolerates 0-0, x/+/#/!? decorations, lowercase promotion) in the given position. */
 export function sanToMove(p: Position, san: string): Move {
-  const clean = san.replace(/[+#!?]+$/g, '').replace(/0/g, 'O')
+  const unrecognized = () => new Error(`Unrecognized notation "${san.length > 20 ? san.slice(0, 20) + '…' : san}"`)
+  if (san.length > MAX_SAN_CHARS) throw unrecognized()
+  let end = san.length
+  while (end > 0 && '+#!?'.includes(san[end - 1]!)) end--
+  const clean = san.slice(0, end).replace(/0/g, 'O')
   const legal = legalMoves(p)
   if (clean === 'O-O' || clean === 'O-O-O') {
     const home = p.turn === 'w' ? 60 : 4
@@ -46,8 +52,8 @@ export function sanToMove(p: Position, san: string): Move {
     if (!m) throw new Error(`Illegal move ${san}`)
     return m
   }
-  const match = /^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQ]))?$/.exec(clean)
-  if (!match) throw new Error(`Illegal move ${san}`)
+  const match = /^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQnbrq]))?$/.exec(clean)
+  if (!match) throw unrecognized()
   const [, pieceCh, fileCh, rankCh, dest, promoCh] = match
   const type = (pieceCh ? pieceCh.toLowerCase() : 'p') as PieceType
   const to = squareIndex(dest!)

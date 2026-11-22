@@ -12,7 +12,12 @@ export class PgnError extends Error {
   }
 }
 
-const RESULTS = new Set(['1-0', '0-1', '1/2-1/2', '*'])
+export const MAX_PLIES = 2000
+const MAX_TOKEN_CHARS = 16
+/** Result tokens (with the unicode half-point spelling) mapped to their canonical form. */
+const RESULTS = new Map([['1-0', '1-0'], ['0-1', '0-1'], ['1/2-1/2', '1/2-1/2'], ['\u00bd-\u00bd', '1/2-1/2'], ['*', '*']])
+/** Tokens that carry no move: continuation dots, en-passant marker, stand-alone annotation glyphs. */
+const SKIP_TOKEN = /^(\.+|e\.p\.|!|\?|!!|\?\?|!\?|\?!|\+-|-\+|=|\+\/-|-\/\+|\+\/=|=\/\+)$/
 
 /** Parse the first game of a PGN text. Mainline only; comments are kept, variations and NAGs dropped. */
 export function parseGame(pgn: string): Game {
@@ -46,7 +51,7 @@ export function parseGame(pgn: string): Game {
       i++
     } else if (ch === '{') {
       const end = text.indexOf('}', i)
-      const body = text.slice(i + 1, end < 0 ? n : end).trim()
+      const body = text.slice(i + 1, end < 0 ? n : end).replace(/\[%[^\]]*\]/g, '').trim()
       const last = plies[plies.length - 1]
       if (last && body) last.comment = last.comment ? `${last.comment} ${body}` : body
       i = end < 0 ? n : end + 1
@@ -78,17 +83,21 @@ export function parseGame(pgn: string): Game {
       while (j < n && !/[\s{(;]/.test(text[j]!)) j++
       const token = text.slice(i, j)
       i = j
+      const where = `Move ${pos.fullmove}${pos.turn === 'b' ? '...' : ''}`
+      if (token.length > MAX_TOKEN_CHARS) throw new PgnError(`${where}: Unrecognized notation "${token.slice(0, 20)}…"`)
       if (RESULTS.has(token)) {
-        result = token
+        result = RESULTS.get(token)
         break scan
       }
       const san = token.replace(/^\d+\.+/, '')
-      if (!san) continue
+      if (!san || SKIP_TOKEN.test(san)) continue
+      if (san === '--' || san === 'Z0') throw new PgnError(`${where} (${san}): null moves are not supported`)
+      if (plies.length >= MAX_PLIES) throw new PgnError(`Game has more than ${MAX_PLIES} half-moves (limit ${MAX_PLIES})`)
       let move
       try {
         move = sanToMove(pos, san)
       } catch (e) {
-        throw new PgnError(`Move ${pos.fullmove}${pos.turn === 'b' ? '...' : ''} (${san}): ${(e as Error).message}`)
+        throw new PgnError(`${where} (${san}): ${(e as Error).message}`)
       }
       const number = pos.fullmove
       const color = pos.turn
@@ -98,7 +107,7 @@ export function parseGame(pgn: string): Game {
     }
   }
 
-  result ??= headers.Result && RESULTS.has(headers.Result) ? headers.Result : undefined
+  result ??= headers.Result && RESULTS.has(headers.Result) ? RESULTS.get(headers.Result) : undefined
   if (plies.length === 0 && !headers.FEN) throw new PgnError('PGN contains no moves')
   return { headers, startFen, plies, result }
 }

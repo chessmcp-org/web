@@ -122,3 +122,9 @@ describe('/login', () => {
     expect(setCookies(res).some((c) => c.startsWith('session=;') || /session=; .*Max-Age=0/i.test(c))).toBe(true)
   })
 })
+
+describe('review fixes: production detection', () => {
+  test('NODE_ENV=production requires secrets even with an http BASE_URL', () => {
+    expect(() => loadConfig({ NODE_ENV: 'production', BASE_URL: 'http://example.com' })).toThrow(/SESSION_SECRET|GOOGLE/)
+  })
+})

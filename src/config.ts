@@ -8,12 +8,12 @@ export type Config = {
 
 type Env = Record<string, string | undefined>
 
-/** Reads UPPER_CASE names (DO) or lower_case names (local .env). Production = https BASE_URL: secrets are mandatory. */
+/** Reads UPPER_CASE names (DO) or lower_case names (local .env). Production = https BASE_URL or NODE_ENV=production: secrets are mandatory. */
 export function loadConfig(env: Env = process.env): Config {
   const get = (name: string) => env[name.toUpperCase()] ?? env[name.toLowerCase()]
   const port = Number(get('PORT') ?? 3000)
   const baseUrl = (get('BASE_URL') ?? `http://localhost:${port}`).replace(/\/$/, '')
-  const production = baseUrl.startsWith('https://')
+  const production = baseUrl.startsWith('https://') || get('NODE_ENV') === 'production'
   const googleClientId = get('GOOGLE_CLIENT_ID') ?? ''
   const googleClientSecret = get('GOOGLE_CLIENT_SECRET') ?? ''
   const sessionSecret = get('SESSION_SECRET') ?? (production ? '' : 'dev-only-insecure-secret')

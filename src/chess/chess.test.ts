@@ -87,3 +87,23 @@ describe('san', () => {
     expect(() => sanToMove(p, 'Nd2')).toThrow(/ambiguous/i)
   })
 })
+
+describe('review fixes: FEN sanity', () => {
+  test('bogus en passant square is dropped, so exd6 cannot delete the black king', () => {
+    const p = parseFen('8/8/8/3kP3/8/8/8/4K3 w - d6 0 1')
+    expect(p.ep).toBeNull()
+    expect(() => sanToMove(p, 'exd6')).toThrow(/Illegal/)
+  })
+  test('a real en passant square is kept', () => {
+    expect(parseFen('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1').ep).toBe(squareIndex('d6'))
+  })
+  test('rejects a position where the side not to move is in check', () => {
+    expect(() => parseFen('4k3/8/8/8/8/8/8/4RK2 w - - 0 1')).toThrow(/check/i)
+  })
+  test('rejects adjacent kings', () => {
+    expect(() => parseFen('8/8/8/3kK3/8/8/8/8 w - - 0 1')).toThrow(/adjacent|kings/i)
+  })
+  test('rejects pawns on the first or last rank', () => {
+    expect(() => parseFen('P3k3/8/8/8/8/8/8/4K3 w - - 0 1')).toThrow(/pawn/i)
+  })
+})

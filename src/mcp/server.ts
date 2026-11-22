@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { verifyMcpToken } from '../auth/token'
 import { config } from '../config'
 import { renderWidgetHtml } from '../widget/player'
 import { TOOLS, WIDGET_MIME, WIDGET_URI, callTool } from './tools'
 
+const MAX_BODY_BYTES = 256 * 1024
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
 
 type Rpc = { jsonrpc: '2.0'; id?: string | number | null; method?: string; params?: any }
@@ -75,6 +77,10 @@ function respond(msg: Rpc): object | null {
 export function mcpRoutes(opts: { secret?: string } = {}) {
   const secret = opts.secret ?? config.sessionSecret
   const app = new Hono()
+  app.use(
+    '/mcp/:token',
+    bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: 'Request body too large' }, 413) }),
+  )
   app.all('/mcp/:token', async (c) => {
     if (!verifyMcpToken(c.req.param('token'), secret)) return c.json({ error: 'Invalid MCP link' }, 401)
     if (c.req.method !== 'POST') return c.text('Method not allowed', 405, { Allow: 'POST' })
@@ -85,8 +91,7 @@ export function mcpRoutes(opts: { secret?: string } = {}) {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })
     }
     if (Array.isArray(body)) {
-      const out = body.map((m) => respond(m as Rpc)).filter((r) => r !== null)
-      return out.length ? c.json(out) : c.body(null, 202)
+      return c.json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Batch requests are not supported' } })
     }
     const out = respond(body as Rpc)
     return out ? c.json(out) : c.body(null, 202)

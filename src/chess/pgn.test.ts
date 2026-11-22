@@ -55,3 +55,44 @@ describe('parseGame', () => {
     expect(g.startFen).toBe('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1')
   })
 })
+
+describe('review fixes: hostile and noisy input', () => {
+  test('a huge garbage token is rejected fast with a short message (no regex blowup)', () => {
+    const t = performance.now()
+    let message = ''
+    try {
+      parseGame('+'.repeat(100_000) + 'a')
+    } catch (e) {
+      message = (e as Error).message
+    }
+    expect(performance.now() - t).toBeLessThan(100)
+    expect(message).toMatch(/Unrecognized notation/)
+    expect(message.length).toBeLessThan(200)
+  })
+  test('more than 2000 half-moves is rejected with a clear error', () => {
+    const cycle = ['Nf3', 'Nf6', 'Ng1', 'Ng8']
+    const moves = Array.from({ length: 2001 }, (_, i) => cycle[i % 4]).join(' ')
+    expect(() => parseGame(moves)).toThrow(/2000/)
+  })
+  test('[%eval] and [%clk] commands are stripped from comments', () => {
+    const g = parseGame('1. e4 { [%eval 0.17] [%clk 0:03:00] } e5 { Solid [%clk 0:02:59] }')
+    expect(g.plies[0]!.comment).toBeUndefined()
+    expect(g.plies[1]!.comment).toBe('Solid')
+  })
+  test('tolerates "...", lone glyphs, e.p., lowercase promotion and the unicode half result', () => {
+    expect(parseGame('1. e4 e5 2. Nf3 ... Nc6').plies.map((p) => p.san)).toEqual(['e4', 'e5', 'Nf3', 'Nc6'])
+    expect(parseGame('1. e4 !? e5 ?! 2. Nf3 !!').plies.length).toBe(3)
+    const ep = parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n\n1. exd6 e.p. Kd7')
+    expect(ep.plies.map((p) => p.san)).toEqual(['exd6', 'Kd7'])
+    const promo = parseGame('[FEN "7k/4P3/8/8/8/8/8/4K3 w - - 0 1"]\n\n1. e8=q+')
+    expect(promo.plies[0]!.san).toBe('e8=Q+')
+    expect(parseGame('1. e4 e5 \u00bd-\u00bd').result).toBe('1/2-1/2')
+  })
+  test('null moves give a clear unsupported error', () => {
+    expect(() => parseGame('1. e4 -- 2. Nf3')).toThrow(/null move/i)
+    expect(() => parseGame('1. e4 Z0 2. Nf3')).toThrow(/null move/i)
+  })
+  test('non-SAN junk says "Unrecognized notation", not "Illegal move"', () => {
+    expect(() => parseGame('1. e4 banana')).toThrow(/Unrecognized notation/)
+  })
+})

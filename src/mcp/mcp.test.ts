@@ -102,3 +102,29 @@ describe('tools/call', () => {
     expect((await call('nope', {})).isError).toBe(true)
   })
 })
+
+describe('review fixes: request limits', () => {
+  test('a body over 256 KB is rejected with 413', async () => {
+    const res = await app.request(`/mcp/${token}`, { method: 'POST', body: 'x'.repeat(300_000) })
+    expect(res.status).toBe(413)
+  })
+  test('batches are rejected as invalid requests, including the empty batch', async () => {
+    const post = (body: unknown) =>
+      app.request(`/mcp/${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    for (const b of [[], [{ jsonrpc: '2.0', id: 1, method: 'ping' }]]) {
+      const j = await (await post(b)).json()
+      expect(j.error.code).toBe(-32600)
+    }
+  })
+  test('a game over the ply cap returns isError', async () => {
+    const cycle = ['Nf3', 'Nf6', 'Ng1', 'Ng8']
+    const pgn = Array.from({ length: 2001 }, (_, i) => cycle[i % 4]).join(' ')
+    const r = await result(await rpc('tools/call', { name: 'show_game', arguments: { pgn } }))
+    expect(r.isError).toBe(true)
+    expect(r.content[0].text).toMatch(/2000/)
+  })
+  test('show_position rejects an impossible position', async () => {
+    const r = await result(await rpc('tools/call', { name: 'show_position', arguments: { fen: '4k3/8/8/8/8/8/8/4RK2 w - - 0 1' } }))
+    expect(r.isError).toBe(true)
+  })
+})
