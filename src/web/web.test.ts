@@ -84,3 +84,30 @@ describe('logo', () => {
     expect(html).toContain('class="mark"')
   })
 })
+
+describe('legal pages', () => {
+  test('/privacy.txt is plain text and describes what is and is not stored', async () => {
+    const res = await app.request('/privacy.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/plain')
+    const t = await res.text()
+    expect(t).toContain('Privacy Policy')
+    expect(t).toContain('Google')
+    expect(t).toMatch(/do not store/i)
+    expect(t).toContain('cookie')
+  })
+  test('/terms.txt is plain text and covers the licence and the private link', async () => {
+    const res = await app.request('/terms.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/plain')
+    const t = await res.text()
+    expect(t).toContain('Terms of Service')
+    expect(t).toContain('CC BY-NC-SA 4.0')
+    expect(t).toMatch(/private link/i)
+  })
+  test('pages link to both documents in the footer', async () => {
+    const html = await (await app.request('/')).text()
+    expect(html).toContain('href="/privacy.txt"')
+    expect(html).toContain('href="/terms.txt"')
+  })
+})

@@ -79,6 +79,8 @@ export function Layout(props: { title: string; user?: string | null; children?: 
           {props.children}
           <footer class="bottom">
             Chess pieces: “Staunty” by sadsnake1 (lichess.org), licensed CC BY-NC-SA 4.0.
+            <br />
+            <a href="/privacy.txt">Privacy</a> · <a href="/terms.txt">Terms</a>
           </footer>
         </div>
       </body>

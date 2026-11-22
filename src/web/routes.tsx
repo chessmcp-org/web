@@ -7,6 +7,7 @@ import { config } from '../config'
 import { renderBoardSvg } from '../render/board'
 import { renderWidgetHtml } from '../widget/player'
 import { Dashboard } from './dashboard'
+import { PRIVACY_TXT, TERMS_TXT } from './legal'
 import { LOGO_SVG } from './logo'
 import { Home } from './home'
 
@@ -38,6 +39,10 @@ export function webRoutes(opts: { secret?: string; baseUrl?: string } = {}) {
   })
 
   app.get('/healthz', (c) => c.text('ok'))
+
+  const text = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
+  app.get('/privacy.txt', (c) => c.body(PRIVACY_TXT, 200, text))
+  app.get('/terms.txt', (c) => c.body(TERMS_TXT, 200, text))
 
   for (const path of ['/logo.svg', '/favicon.svg']) {
     app.get(path, (c) => c.body(LOGO_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }))
