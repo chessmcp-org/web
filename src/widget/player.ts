@@ -53,6 +53,7 @@ nav{display:flex;gap:6px;align-items:center;margin-top:10px}
 nav button{min-width:44px;font-weight:700;background:var(--panel);color:var(--fg);border:1px solid #4a4743;border-radius:6px;padding:6px 14px;font-size:16px;cursor:pointer}
 nav button:disabled{opacity:.35;cursor:default}
 #status{margin-left:auto;color:var(--muted)}
+body.static aside,body.static nav{display:none}
 footer{margin-top:12px;color:var(--muted);font-size:11px}
 `
 

@@ -106,6 +106,7 @@
     var h = d.headers || {};
     document.getElementById('title').textContent = h.White || h.Black ? (h.White || '?') + ' vs ' + (h.Black || '?') : 'Chess';
     document.getElementById('subtitle').textContent = [h.Event, h.Date, d.result].filter(Boolean).join(' \u00b7 ');
+    document.body.classList.toggle('static', d.plies.length === 0);
     buildMoves();
     go(typeof d.startPly === 'number' ? d.startPly : 0);
   }

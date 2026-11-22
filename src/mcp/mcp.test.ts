@@ -129,3 +129,46 @@ describe('review fixes: request limits', () => {
     expect(r.isError).toBe(true)
   })
 })
+
+describe('tutorials from a position', () => {
+  const call = async (name: string, args: unknown) => result(await rpc('tools/call', { name, arguments: args }))
+  const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
+
+  test('show_position with moves plays the line from that position, starting at the beginning', async () => {
+    const r = await call('show_position', { fen: KR, moves: 'Ra7 Kf8 Kf3 Kg8' })
+    expect(r.isError).toBeFalsy()
+    expect(r._meta.game.plies.map((p: any) => p.san)).toEqual(['Ra7', 'Kf8', 'Kf3', 'Kg8'])
+    expect(r._meta.game.startPly).toBe(0)
+    expect(r._meta.game.startFen).toBe(KR)
+  })
+  test('moves may carry move numbers and the ply argument picks the starting move', async () => {
+    const r = await call('show_position', { fen: KR, moves: '1. Ra7 Kf8 2. Kf3', ply: 2 })
+    expect(r._meta.game.plies.length).toBe(3)
+    expect(r._meta.game.startPly).toBe(2)
+  })
+  test('an illegal move in moves → isError naming the move; non-string moves → isError', async () => {
+    const bad = await call('show_position', { fen: KR, moves: 'Ra7 Ke5' })
+    expect(bad.isError).toBe(true)
+    expect(bad.content[0].text).toMatch(/Ke5/)
+    expect((await call('show_position', { fen: KR, moves: 42 })).isError).toBe(true)
+  })
+  test('a hostile fen cannot inject PGN headers through moves', async () => {
+    const r = await call('show_position', { fen: KR + '"]\n[White "x', moves: 'Ra7' })
+    expect(r.isError).toBe(true)
+  })
+  test('descriptions steer the model: show_position says to pass moves for sequences, show_game mentions FEN starts', async () => {
+    const { tools } = await result(await rpc('tools/list'))
+    expect(tools[1].inputSchema.properties.moves).toBeDefined()
+    expect(tools[1].description).toMatch(/moves/)
+    expect(tools[1].description).toMatch(/show_game|sequence/)
+    expect(tools[0].description).toMatch(/FEN/)
+  })
+  test('result text tells the model which position and last move are on screen', async () => {
+    const r = await call('show_game', { pgn: '1. e4 e5 2. Nf3', ply: 2 })
+    const text = r.content[0].text
+    expect(text).toContain('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2')
+    expect(text).toContain('1... e5')
+    const fresh = await call('show_position', { fen: KR })
+    expect(fresh.content[0].text).toContain(KR)
+  })
+})

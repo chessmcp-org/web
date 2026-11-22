@@ -19,7 +19,7 @@ export function squareIndex(name: string): number {
 export function parseFen(fen: string): Position {
   const bad = (why: string) => new Error(`Invalid FEN (${why}): "${fen}"`)
   const parts = fen.trim().split(/\s+/)
-  if (parts.length < 4) throw bad('expected at least 4 fields')
+  if (parts.length < 4 || parts.length > 6) throw bad('expected 4 to 6 space-separated fields')
   const [placement, turn, castling, ep, half = '0', full = '1'] = parts as [string, string, string, string, string?, string?]
   const rows = placement.split('/')
   if (rows.length !== 8) throw bad('expected 8 ranks')
