@@ -1,4 +1,4 @@
-import { parseFen } from '../chess/fen'
+import { START_FEN, parseFen } from '../chess/fen'
 import type { Game } from '../chess/game'
 import { renderBoardSvg } from '../render/board'
 import { escapeXml } from '../render/escape'
@@ -16,11 +16,14 @@ export type WidgetData = {
   headers: Record<string, string>
   startFen: string
   result?: string
+  /** Ply to show first (0 = start position). Defaults to 0. */
+  startPly?: number
   plies: { san: string; fen: string; comment?: string; number: number; color: 'w' | 'b'; from: number; to: number }[]
 }
 
-export function widgetData(game: Game): WidgetData {
+export function widgetData(game: Game, startPly?: number): WidgetData {
   return {
+    startPly,
     headers: game.headers,
     startFen: game.startFen,
     result: game.result,
@@ -53,17 +56,19 @@ nav button:disabled{opacity:.35;cursor:default}
 footer{margin-top:12px;color:var(--muted);font-size:11px}
 `
 
-export function renderWidgetHtml(game: Game): string {
-  const h = game.headers
-  const players = h.White || h.Black ? `${escapeXml(h.White ?? '?')} vs ${escapeXml(h.Black ?? '?')}` : 'Chess position'
-  const sub = [h.Event, h.Date, game.result].filter(Boolean).map((s) => escapeXml(s!)).join(' · ')
+/** `game = null` renders the shell used as the MCP resource: the host later supplies the data (see client.js.txt). */
+export function renderWidgetHtml(game: Game | null, startPly?: number): string {
+  const h = game?.headers ?? {}
+  const players = h.White || h.Black ? `${escapeXml(h.White ?? '?')} vs ${escapeXml(h.Black ?? '?')}` : 'Chess'
+  const sub = [h.Event, h.Date, game?.result].filter(Boolean).map((s) => escapeXml(s!)).join(' · ')
+  const startFen = game?.startFen ?? START_FEN
   // Empty board (squares + labels + piece defs); the client draws pieces and highlights on top.
-  const board = renderBoardSvg({ ...parseFen(game.startFen), board: Array(64).fill(null) }).replace('<svg ', '<svg id="board-svg" ')
+  const board = renderBoardSvg({ ...parseFen(startFen), board: Array(64).fill(null) }).replace('<svg ', '<svg id="board-svg" ')
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>chessmcp</title><style>${CSS}</style></head>
 <body><div id="app">
-<h1>${players}<small>${sub}</small></h1>
+<h1><span id="title">${players}</span><small id="subtitle">${sub}</small></h1>
 <div class="main"><div id="board">${board}</div><aside><div id="moves"></div><div id="comment"></div></aside></div>
 <nav aria-label="Playback">
 <button id="b-first" type="button" title="Start (Home)">«</button><button id="b-prev" type="button" title="Back (←)">‹</button>
@@ -71,7 +76,7 @@ export function renderWidgetHtml(game: Game): string {
 <span id="status"></span></nav>
 <footer>${escapeXml(ATTRIBUTION)} · chessmcp.org</footer>
 </div>
-<script type="application/json" id="game-data">${safeJson(widgetData(game))}</script>
+<script type="application/json" id="game-data">${safeJson(game ? widgetData(game, startPly) : null)}</script>
 <script>${CLIENT_JS}</script>
 </body></html>`
 }

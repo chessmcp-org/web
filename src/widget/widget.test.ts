@@ -41,4 +41,13 @@ describe('renderWidgetHtml', () => {
     expect(html.match(/<\/script>/g)!.length).toBe(2)
     expect(html).not.toContain('<img')
   })
+  test('shell mode (null game) embeds null so the host can supply data later', () => {
+    const html = renderWidgetHtml(null)
+    expect(embedded(html)).toBeNull()
+    expect(html).toContain('id="board-svg"')
+  })
+  test('startPly is carried in the embedded data when given', () => {
+    const data = embedded(renderWidgetHtml(parseGame(SHORT), 2))
+    expect(data.startPly).toBe(2)
+  })
 })

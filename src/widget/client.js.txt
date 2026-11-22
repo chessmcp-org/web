@@ -103,8 +103,11 @@
   function load(d) {
     data = d;
     flipped = false;
+    var h = d.headers || {};
+    document.getElementById('title').textContent = h.White || h.Black ? (h.White || '?') + ' vs ' + (h.Black || '?') : 'Chess';
+    document.getElementById('subtitle').textContent = [h.Event, h.Date, d.result].filter(Boolean).join(' \u00b7 ');
     buildMoves();
-    go(0);
+    go(typeof d.startPly === 'number' ? d.startPly : 0);
   }
 
   btn.first.addEventListener('click', function () { go(0); });
@@ -119,14 +122,41 @@
     else if (e.key === 'End') { go(data.plies.length); e.preventDefault(); }
   });
 
+  // The game can arrive embedded (standalone page), in a tool result _meta.game (hidden from the model),
+  // in structuredContent.game, via window.openai aliases, or via the MCP Apps postMessage bridge.
+  function fromResult(r) {
+    if (!r) return null;
+    if (r._meta && r._meta.game) return r._meta.game;
+    if (r.structuredContent && r.structuredContent.game) return r.structuredContent.game;
+    return null;
+  }
+
   function init() {
-    var el = document.getElementById('game-data');
     var d = null;
-    try { d = JSON.parse(el.textContent); } catch (e) {}
-    if (!d && window.openai && window.openai.toolOutput && window.openai.toolOutput.game) d = window.openai.toolOutput.game;
+    try { d = JSON.parse(document.getElementById('game-data').textContent); } catch (e) {}
+    var o = window.openai;
+    if (!d && o) d = (o.toolResponseMetadata && o.toolResponseMetadata.game) || (o.toolOutput && o.toolOutput.game) || null;
     if (d) load(d);
   }
+
+  window.addEventListener('message', function (e) {
+    var m = e.data;
+    if (e.source !== window.parent || !m || m.jsonrpc !== '2.0') return;
+    if (m.method === 'ui/notifications/tool-result') {
+      var d = fromResult(m.params);
+      if (d) load(d);
+    }
+  });
   window.addEventListener('openai:set_globals', init);
   window.chessmcpLoad = load;
+
+  // MCP Apps handshake (best effort): tell the host we are ready so it sends the tool result.
+  if (window.parent !== window) {
+    try {
+      window.parent.postMessage({ jsonrpc: '2.0', id: 1, method: 'ui/initialize', params: {
+        appInfo: { name: 'chessmcp', version: '0.1.0' }, appCapabilities: {}, protocolVersion: '2025-06-18' } }, '*');
+      window.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} }, '*');
+    } catch (e) {}
+  }
   init();
 })();
