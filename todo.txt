@@ -1,0 +1,40 @@
+This is chessmcp.org, a web app that visualize chess games.
+
+Description:
+chessmcp.org is a web app that visualize chess games / tutorials / board positions.
+It supports basic board visualization and advanced features like:
+    - cell highlighting
+    - multiple arrows
+
+In its core it takes a PGN (Portable Game Notation) file as input and generate a visual interactive chess board:
+The visualization is interactive:
+    - Users can stop, pause, step, forward, and backward through the game.
+    - Users can also auto-play the game / tutorial as a video.
+
+
+User Interface:
+- There should be a nice looking home page that explain what chessmcp.org is 
+- There should be a google login button to allow users to login with their google account.
+- The goal of the app is to let users learn chess using chat gpt / gemini / etc... so the app should render UI that can be embedded in a chat interface.
+- After a user loges in it should see a link to his own mcp server that he can connect to any of the LLM chats.
+
+
+Implementation:
+- implement with bun, typescript and Hono for the web server.
+- do not use existing FEN 2 SVG or PGN 2 SVG libraries, implement your own.
+- All visualization should be implemented with SVG, use this https://github.com/lichess-org/lila/tree/master/public/piece/staunty for pieces 
+- The app should run at https://chessmcp.org.
+- The app is hosted on digital ocean apps platform.
+- Domain is managed by Cloudflare.
+- use Hono for the web server.
+- implement an MCP server.
+- there is no database, the app just converts PGN files to visualizations and serves them to users.
+
+
+
+Tasks:
+- review the requirements, ask clarification questions and create a project plan at chessmcp.md
+- split the plan to several versions, first version should be an MVP.
+- tell me what you need from me 
+- at the end of the implementation the app should be live at https://chessmcp.org and fully functional with the features described above.
+- create an app.yml and a minimal Dockerfile for deployment on Digital Ocean Apps platform.
