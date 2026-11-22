@@ -69,6 +69,7 @@ describe('initialize and listings', () => {
 describe('show_lesson', () => {
   const call = async (args: unknown, name = 'show_lesson') => result(await rpc('tools/call', { name, arguments: args }))
   const KR = '6k1/8/8/8/8/8/4K3/R7 w - - 0 1'
+  const MATE_IN_1 = '7k/8/6K1/8/8/8/8/R7 w - - 0 1'
 
   test('plays a line from the standard start: small structuredContent, game in _meta, move list in the text', async () => {
     const r = await call({ moves: '1. e4 e5 2. Nf3' })
@@ -86,6 +87,24 @@ describe('show_lesson', () => {
     expect(r._meta.game.title).toBe('Rook mate')
     expect(r._meta.game.plies[0].comment).toBe('cuts off the king')
     expect(r.content[0].text).toContain('Rook mate')
+  })
+  test('reports the final position: checkmate, ongoing, stalemate', async () => {
+    const mate = await call({ fen: MATE_IN_1, moves: 'Ra8#' })
+    expect(mate.content[0].text).toMatch(/Final position: checkmate\. White wins/)
+    const ongoing = await call({ fen: KR, moves: 'Ra7 Kf8' })
+    expect(ongoing.content[0].text).toMatch(/Final position: not checkmate; White to move/)
+    const stale = await call({ fen: '7k/8/6K1/8/8/8/8/5Q2 w - - 0 1', moves: 'Qf7' })
+    expect(stale.content[0].text).toMatch(/Final position: stalemate/)
+  })
+  test('warns when the title promises mate but the line does not end in mate', async () => {
+    const r = await call({ fen: KR, title: 'King and rook checkmate', moves: 'Ra7 Kf8' })
+    expect(r.content[0].text).toMatch(/WARNING: .*checkmate/i)
+    const ok = await call({ fen: MATE_IN_1, title: 'King and rook checkmate', moves: 'Ra8#' })
+    expect(ok.content[0].text).not.toMatch(/WARNING/)
+  })
+  test('warns when an endgame lesson starts from the standard position', async () => {
+    const r = await call({ title: 'Rook endgame', moves: '1. e4 e5' })
+    expect(r.content[0].text).toMatch(/WARNING: .*fen/i)
   })
   test('accepts a full PGN with headers as moves', async () => {
     const r = await call({ moves: '[White "A"]\n[Black "B"]\n\n1. e4 e5' })
