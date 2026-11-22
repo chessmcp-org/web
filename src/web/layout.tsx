@@ -1,4 +1,6 @@
+import { raw } from 'hono/html'
 import type { Child } from 'hono/jsx'
+import { LOGO_SVG } from './logo'
 
 const CSS = `
 :root{--pine:#14201c;--pine2:#1c2d27;--line:#2f453c;--ivory:#f2efe6;--muted:#a9b5ad;--brass:#d9b44a;--brass-ink:#241b05;
@@ -11,7 +13,9 @@ a{color:var(--brass)}
 .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
 header.top{display:flex;justify-content:space-between;align-items:center;padding:22px 0}
 .brand{font:700 20px var(--serif);color:var(--ivory);text-decoration:none;letter-spacing:.01em}
+.brand{display:inline-flex;align-items:center;gap:10px}
 .brand b{color:var(--brass)}
+.mark{display:block;width:40px;height:40px}.mark svg{display:block;width:100%;height:100%}
 header.top form{margin:0}
 .link{background:none;border:0;color:var(--muted);font:inherit;cursor:pointer;text-decoration:underline;padding:4px}
 .btn{display:inline-flex;align-items:center;gap:10px;background:var(--brass);color:var(--brass-ink);font:600 17px var(--sans);padding:13px 22px;border-radius:8px;border:0;text-decoration:none;cursor:pointer}
@@ -50,6 +54,7 @@ export function Layout(props: { title: string; user?: string | null; children?: 
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>{props.title}</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <meta name="description" content="Turn any chess game or position into an interactive board inside your ChatGPT conversation." />
         <style dangerouslySetInnerHTML={{ __html: CSS }} />
       </head>
@@ -57,7 +62,10 @@ export function Layout(props: { title: string; user?: string | null; children?: 
         <div class="wrap">
           <header class="top">
             <a class="brand" href="/">
-              chess<b>mcp</b>.org
+              <span class="mark">{raw(LOGO_SVG)}</span>
+              <span>
+                chess<b>mcp</b>.org
+              </span>
             </a>
             {props.user ? (
               <form method="post" action="/logout">

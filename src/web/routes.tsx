@@ -7,6 +7,7 @@ import { config } from '../config'
 import { renderBoardSvg } from '../render/board'
 import { renderWidgetHtml } from '../widget/player'
 import { Dashboard } from './dashboard'
+import { LOGO_SVG } from './logo'
 import { Home } from './home'
 
 const OPERA_GAME =
@@ -37,6 +38,10 @@ export function webRoutes(opts: { secret?: string; baseUrl?: string } = {}) {
   })
 
   app.get('/healthz', (c) => c.text('ok'))
+
+  for (const path of ['/logo.svg', '/favicon.svg']) {
+    app.get(path, (c) => c.body(LOGO_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }))
+  }
 
   if (dev) {
     // Local-only: render a PGN as the widget, e.g. /preview?pgn=1.+e4+e5

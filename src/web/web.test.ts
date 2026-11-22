@@ -67,3 +67,20 @@ describe('misc', () => {
     expect((await dev.request('/preview?pgn=1.+e4+e5+Qh6')).status).toBe(400)
   })
 })
+
+describe('logo', () => {
+  test('/logo.svg and /favicon.svg serve the mark as svg', async () => {
+    for (const path of ['/logo.svg', '/favicon.svg']) {
+      const res = await app.request(path)
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('image/svg+xml')
+      expect((await res.text()).startsWith('<svg')).toBe(true)
+    }
+  })
+  test('pages link the favicon and show the mark in the header', async () => {
+    const html = await (await app.request('/')).text()
+    expect(html).toContain('rel="icon"')
+    expect(html).toContain('href="/favicon.svg"')
+    expect(html).toContain('class="mark"')
+  })
+})
