@@ -111,3 +111,14 @@ describe('legal pages', () => {
     expect(html).toContain('href="/terms.txt"')
   })
 })
+
+describe('connector icon', () => {
+  test('/logo-512.png serves a real 512px png', async () => {
+    const res = await app.request('/logo-512.png')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47])
+    expect(new DataView(bytes.buffer).getUint32(16)).toBe(512) // IHDR width
+  })
+})

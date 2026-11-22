@@ -3,7 +3,7 @@ import { makeMcpToken } from '../auth/token'
 import { mcpRoutes } from './server'
 
 const SECRET = 'mcp-test-secret'
-const app = mcpRoutes({ secret: SECRET })
+const app = mcpRoutes({ secret: SECRET, baseUrl: 'https://chessmcp.org' })
 const token = makeMcpToken('user-1', SECRET)
 
 async function rpc(method: string, params?: unknown, id: number | null = 1, tok = token) {
@@ -42,6 +42,7 @@ describe('initialize and listings', () => {
     expect(r.capabilities.tools).toBeDefined()
     expect(r.capabilities.resources).toBeDefined()
     expect(r.serverInfo.name).toBe('chessmcp')
+    expect(r.serverInfo.icons[0]).toEqual({ src: 'https://chessmcp.org/logo-512.png', mimeType: 'image/png', sizes: ['512x512'] })
   })
   test('tools/list has exactly show_game and show_position linked to the widget', async () => {
     const { tools } = await result(await rpc('tools/list'))

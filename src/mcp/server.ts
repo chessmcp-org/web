@@ -18,14 +18,19 @@ class RpcError extends Error {
 
 let shell: string | undefined
 
-function handle(method: string, params: any): unknown {
+function handle(method: string, params: any, baseUrl: string): unknown {
   switch (method) {
     case 'initialize': {
       const asked = params?.protocolVersion
       return {
         protocolVersion: SUPPORTED_VERSIONS.includes(asked) ? asked : '2025-06-18',
         capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
-        serverInfo: { name: 'chessmcp', title: 'chessmcp.org', version: '0.1.0' },
+        serverInfo: {
+          name: 'chessmcp',
+          title: 'chessmcp.org',
+          version: '0.1.0',
+          icons: [{ src: `${baseUrl}/logo-512.png`, mimeType: 'image/png', sizes: ['512x512'] }],
+        },
         instructions: 'Use show_game to display a PGN game, or show_position to display a FEN position, as an interactive board.',
       }
     }
@@ -58,13 +63,13 @@ function handle(method: string, params: any): unknown {
   }
 }
 
-function respond(msg: Rpc): object | null {
+function respond(msg: Rpc, baseUrl: string): object | null {
   if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
     return { jsonrpc: '2.0', id: msg?.id ?? null, error: { code: -32600, message: 'Invalid request' } }
   }
   const isNotification = msg.id === undefined
   try {
-    const result = handle(msg.method, msg.params)
+    const result = handle(msg.method, msg.params, baseUrl)
     return isNotification ? null : { jsonrpc: '2.0', id: msg.id, result }
   } catch (e) {
     if (isNotification) return null
@@ -74,8 +79,9 @@ function respond(msg: Rpc): object | null {
 }
 
 /** Stateless streamable-HTTP MCP endpoint at /mcp/:token (JSON responses, no sessions). */
-export function mcpRoutes(opts: { secret?: string } = {}) {
+export function mcpRoutes(opts: { secret?: string; baseUrl?: string } = {}) {
   const secret = opts.secret ?? config.sessionSecret
+  const baseUrl = (opts.baseUrl ?? config.baseUrl).replace(/\/$/, '')
   const app = new Hono()
   app.use(
     '/mcp/:token',
@@ -93,7 +99,7 @@ export function mcpRoutes(opts: { secret?: string } = {}) {
     if (Array.isArray(body)) {
       return c.json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Batch requests are not supported' } })
     }
-    const out = respond(body as Rpc)
+    const out = respond(body as Rpc, baseUrl)
     return out ? c.json(out) : c.body(null, 202)
   })
   return app

@@ -44,6 +44,13 @@ export function webRoutes(opts: { secret?: string; baseUrl?: string } = {}) {
   app.get('/privacy.txt', (c) => c.body(PRIVACY_TXT, 200, text))
   app.get('/terms.txt', (c) => c.body(TERMS_TXT, 200, text))
 
+  app.get('/logo-512.png', (c) =>
+    c.body(Bun.file(new URL('../../assets/logo-512.png', import.meta.url)).stream(), 200, {
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=86400',
+    }),
+  )
+
   for (const path of ['/logo.svg', '/favicon.svg']) {
     app.get(path, (c) => c.body(LOGO_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }))
   }
